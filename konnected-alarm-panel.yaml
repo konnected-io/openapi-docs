@@ -1,0 +1,589 @@
+openapi: 3.1.0
+info:
+  title: Konnected Alarm Panel API
+  summary: Local REST based API for the Konnected Alarm Panel and Alarm Panel Pro
+  description: Konnected's Alarm Panel and Alarm Panel Pro share a common HTTP API for integrating with a local smart home platform, app or controller.
+  version: 1.0.0
+  termsOfService: https://konnected.io/terms
+  contact:
+      name: Konnected Support
+      url: https://help.konnected.io
+      email: help@konnected.io
+servers:
+  - url: http://{localIP}:{port}
+    description: Device on local network    
+    variables:
+      localIp:
+        default: 192.168.1.100
+      port:        
+        default: '9123'
+paths:
+  /ota:
+    post:
+      summary: Over the Air Update
+      description: Initiate an Over-the-Air (OTA) update of the device embedded software or firmware.
+      operationId: postOta
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ota'
+      responses:
+        '200':
+          description: OTA update initiated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  uri:
+                    type: string
+
+  /lock:
+    get:
+      summary: Lock Status
+      description: Status of the device settings lock.
+      operationId: getLock
+      responses:
+        '200':
+          description: Lock status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  state:
+                    type: string
+                    description: Lock state (`locked` or `unlocked`)
+    put:
+      summary: Lock Device Settings
+      description: Locks or unlocks the device settings for security. Locking prevents any settings or configuration from being changed until the device is unlocked.
+      operationId: putLock
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - pwd
+              properties:
+                pwd:
+                  type: string
+                  description: A lock password.
+      responses:
+        '200':
+          description: Lock status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  state:
+                    type: string
+                    description: Lock state (`locked` or `unlocked`)
+                  msg:
+                    type: string
+                    description: A message
+            
+  /settings:
+    post:
+      summary: Device Provisioning
+      description: >
+        A Konnected Alarm Panel or Alarm Panel Pro needs to be provisioned via this endpoint to specify the device inputs, outputs, 
+        and the endpoint for the hub or controller. After this provisioning step, the Alarm Panel will communicate state changes to the
+        endpoint specified, and will respond to state change commands authenticated with the valid token.
+      operationId: postSettings
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/settings'
+      responses:
+        '200':
+          description: Settings set successfully
+
+
+  /status:
+    get:
+      summary: Device Status
+      description: Returns a snapshot of the device settings, IO states, and device information.
+      operationId: getStatus
+      responses:
+        '200':
+          description: status response
+          content:
+            text/html:
+              schema:
+                type: string
+            application/json:
+              schema:
+                $ref: '#/components/schemas/status'
+
+  /wifi:
+    put:
+      summary: Set WiFi Credentials
+      description: Set the SSID and password to connect to a WiFi network. This endpoint is only available on the Alarm Panel Pro.
+      operationId: putWifi
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/wifi'
+      responses:
+        '200':
+          description: WiFi Settings Set
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/wifi'
+
+
+  /zone:
+    get:
+      summary: Zone Status
+      description: > 
+        Returns the state of a zone. This endpoint works for binary sensor zones or outputs, but not digital sensors.
+        This endpoint should only be used for controller/hub initialization or manual user refresh actions. It is NOT recommended to 
+        poll this endpoint to monitor sensor states. For that, you should implement an endpoint or to receive state updates pushed from
+        the device.
+      operationId: getZone
+      parameters:
+        - in: query
+          name: zone
+          schema:
+            type: string
+          description: Zone identifier to query state (if omitted, all binary sensor zones are returned).
+      responses:
+        '200':
+          description: Zone response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/zone'
+    put:
+      summary: Switch/Actuator Command
+      description: Update the state of one or more switch/actuator zones.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/actuatorCommand'
+      responses:
+        '200':
+          description: Command received
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/actuatorReading'
+
+components:
+  schemas:
+    ota:
+      type: object
+      required:
+        - uri
+      properties:
+        uri:
+          type: string
+          description: The URI of the OTA update image.
+        type:
+          type: string
+          description: The software layer to update. `fw` for the device firmware or `app` for the software/application layer. This parameter only for the Alarm Panel Pro.
+    
+    settings:
+      type: object
+      required:
+        - endpoint
+        - token
+      properties:
+        endpoint:
+          type: string
+          description: >
+            The http(s) endpoint of the smart home hub or controller that Konnected will post state updates to. Include `http` or `https`
+            and the full hostname or IP address and path.
+          examples:
+            local:
+              summary: A local home automation controller 
+              value: http://192.168.1.105:8123/api/konnected
+            remote:
+              summary: A dynamic DNS host
+              value: https://mysmarthome.duckdns.org/api/konnected
+        token:
+          type: string
+          description: A shared secret token set by the controller. Subsequent reqeusts to actuate inputs will require this token in the `Authorization` header.
+        endpoint_type:
+          type: string
+          description: The endpoint type. Use `rest` for local REST-based controllers.
+          enum:
+            - rest
+            - aws_iot
+          default: rest
+        aws:
+          type: object
+          description: > 
+            A set of AWS credentials and settings for connecting and communicating with AWS IoT. This is only required 
+            if `endpoint_type` is `aws_iot`.
+          properties:
+            certs:
+              type: object
+              properties:
+                client_cert:
+                  type: string
+                  description: PEM encoded client certificate.
+                client_key:
+                  type: string
+                  description: PEM encoded client key.
+            topics:
+              type: object
+              properties:
+                sensor:
+                  type: string
+                  description: An AWS IoT topic string that Konnected will post state changes to.
+                switch:
+                  type: string
+                  description: An AWS IoT topic string that Konnected will subscribe to for actuator state change commands.
+                heartbeat:
+                  type: string
+                  description: An AWS Iot topic string that Konnected will post a heartbeat every 5 minutes.
+
+        sensors:
+          type: array
+          description: > 
+            Binary sensor zones to monitor. Use for contact sensors, motion sensors, water leak sensors, and any 
+            open/close or on/off sensor type. Valid zones on the Alarm Panel (ESP8266) are `1` thru `6`. 
+            On the Alarm Panel Pro (ESP32) valid zones are `1` thru `12`.
+          items:
+            $ref: '#/components/schemas/sensor'
+        actuators:
+          type: array
+          description: > 
+            Actuator zones to control. Use for sirens, switches, strobes, buzzers and any device which is turned
+            on and off by Konnected. Valid zones on the Alarm Panel (ESP8266) are `1` thru `5` and `out`. 
+            On the Alarm Panel Pro (ESP32) valid zones are `1` thru `8` and `alarm1`, `out1`, and `alarm2_out2`.
+          items:
+            $ref: '#/components/schemas/actuator'        
+        dht_sensors:
+          type: array
+          description: >
+            Digital temperature and humidity sensor zones. Use a DHT22 type sensor connected to zones `1` thru `5` on the Alarm
+            Panel or `1` thru `8` on the Alarm Panel Pro.
+          items:
+            $ref: '#/components/schemas/tempSensor'
+        ds18b20_sensors:
+          type: array
+          description: >
+            Digital temperature sensor zones. Use a DS18B20 type sensor connected to zones `1` thru `5` on the Alarm
+            Panel or `1` thru `8` on the Alarm Panel Pro.
+          items:
+            $ref: '#/components/schemas/tempSensor'
+        blink:
+          type: boolean
+          description: Should the blue status LED blink upon communication with the controller (`true` if not set).
+        discovery:
+          type: boolean
+          description: Should the Konnected device respond to SSDP discovery requests (`true` if not set).
+        time_server:
+          type: string
+          description: A custom time server implementing the NTP protocol.
+          example: time.google.com            
+    
+    status:
+      type: object
+      properties:
+        model:
+          type: string
+          description: The device model name
+        chipId:
+          type: string
+          description: A unique ID for the device
+        hwVersion:
+          type: string
+          description: The firmware version
+        swVersion:
+          type: string
+          description: The software application version
+        heap:
+          type: integer
+          description: The amount of remaining heap memory
+        uptime:
+          type: integer
+          description: The time elapsed since the device last booted/rebooted (seconds)
+        ip:
+          type: string
+          description: The device's IP address on the network
+        port:
+          type: string
+          description: The device's HTTP control port
+        nm:
+          type: string
+          description: Netmask
+        gw:
+          type: string
+          description: Gateway IP address
+        mac:
+          type: string
+          description: The device's mac address
+        rssi:
+          type: integer
+          description: RSSI of the WiFi connection (if active)
+        connection_type:
+          type: string
+          description: The device's connection type
+          enum:
+            - WiFi
+            - wired
+        sensors:
+          type: array
+          items: 
+            $ref: '#/components/schemas/sensorReading'
+        actuators:
+          type: array
+          items: 
+            $ref: '#/components/schemas/actuatorReading'
+        dht_sensors:
+          type: array
+          items: 
+            $ref: '#/components/schemas/tempSensor'
+        ds18b20_sensors:
+          type: array
+          items: 
+            $ref: '#/components/schemas/tempSensor'
+        settings:
+          type: object
+          properties:
+            endpoint:
+              type: string
+              description: The configured hub/controller endpoint
+            endpoint_type:
+              type: string
+              description: The configured endpoint type
+              enum:
+                - rest
+                - aws_iot
+
+    sensor:
+      type: object
+      required:
+        - zone
+      properties:
+        zone:
+          type: string
+          description: The zone identifier
+          enum:
+            - '1'
+            - '2'
+            - '3'
+            - '4'
+            - '5'
+            - '6'
+            - '7'
+            - '8'
+            - '9'
+            - '10'
+            - '11'
+            - '12'
+
+    wifi:
+      type: object
+      required:
+        - ssid
+      properties:
+        ssid:
+          type: string
+          description: The WiFi network name (SSID).
+        pwd:
+          type: string
+          description: The WiFi network password.
+
+    zone:
+      type: object
+      properties:
+        zone:
+          type: string
+          description: The zone identifier
+          enum:
+            - '1'
+            - '2'
+            - '3'
+            - '4'
+            - '5'
+            - '6'
+            - '7'
+            - '8'
+            - '9'
+            - '10'
+            - '11'
+            - '12'
+            - 'out'
+            - 'alarm1'
+            - 'out1'
+            - 'alarm2_out2'
+        state:
+          type: integer
+          description: The current state of the device (`1` = open/on; `0` = closed/off)
+          enum:
+            - '0'
+            - '1'
+
+    actuatorCommand:
+      type: object
+      required:
+        - zone
+        - state
+      properties:
+        zone:
+          type: string
+          description: The zone identifier
+          enum:
+            - '1'
+            - '2'
+            - '3'
+            - '4'
+            - '5'
+            - '6'
+            - '7'
+            - '8'
+            - 'out'
+            - 'out1'
+            - 'alarm1'
+            - 'alarm2_out2'
+        state:
+          type: integer
+          description: Switch state
+          enum:
+            - '0'
+            - '1'
+        times:
+          type: integer
+          description: >
+            Number of times to pulse/blink the switch. Must be a positive integer greater than 0, or the special value `-1`
+            which indicates infinite repeat (until turned off).
+          minimum: -1
+        momentary:
+          type: integer
+          description: The duration of each pulse in milliseconds. For example, a value of `500` means half of a second.        
+        pause:
+          type: integer
+          description: The duration of pauses between each pulse in millsecons. For example, a value of `1000` means one second.        
+       
+
+    sensorReading:
+      type: object
+      properties:
+        zone:
+          type: string
+          description: The zone identifier
+          enum:
+            - '1'
+            - '2'
+            - '3'
+            - '4'
+            - '5'
+            - '6'
+            - '7'
+            - '8'
+            - '9'
+            - '10'
+            - '11'
+            - '12'
+        state:
+          type: integer
+          description: Sensor state
+          enum:
+            - '0'
+            - '1'
+
+    actuator:
+      type: object
+      required:
+        - zone
+      properties:
+        zone:
+          type: string
+          description: The zone identifier
+          enum:
+            - '1'
+            - '2'
+            - '3'
+            - '4'
+            - '5'
+            - '6'
+            - '7'
+            - '8'
+            - 'out'
+            - 'out1'
+            - 'alarm1'
+            - 'alarm2_out2'
+        trigger:
+          type: integer
+          description: Trigger level (`1` means high and is the default)
+          enum:
+            - '0'
+            - '1'
+
+    actuatorReading:
+      type: object
+      required:
+        - zone
+      properties:
+        zone:
+          type: string
+          description: The zone identifier
+          enum:
+            - '1'
+            - '2'
+            - '3'
+            - '4'
+            - '5'
+            - '6'
+            - '7'
+            - '8'
+            - 'out'
+            - 'out1'
+            - 'alarm1'
+            - 'alarm2_out2'
+        state:
+          type: integer
+          description: The on/off state
+          enum:
+            - '0'
+            - '1'
+        trigger:
+          type: integer
+          description: Trigger level (`1` means high and is the default)
+          enum:
+            - '0'
+            - '1'
+
+
+    tempSensor:
+      type: object
+      required:
+        - zone
+      properties:
+        zone:
+          type: string
+          description: The zone identifier
+          enum:
+            - '1'
+            - '2'
+            - '3'
+            - '4'
+            - '5'
+            - '6'
+            - '7'
+            - '8'
+        poll_interval:
+          type: integer
+          description: Polling interval in minutes (default `3` minutes)
+          minimum: 1
+          maximum: 114
+
+
+          
+
+
+
+x-explorer-enabled: false
