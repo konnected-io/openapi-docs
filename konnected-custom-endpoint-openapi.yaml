@@ -1,0 +1,90 @@
+openapi: 3.1.0
+info:
+  title: Custom Controller Endpoint API Spec
+  summary: API Specification for Implementing a Custom Endpoint Application to act as a Controller for Konnected devices
+  description: To 
+  version: 1.0.0
+  termsOfService: https://konnected.io/terms
+  contact:
+      name: Konnected Support
+      url: https://help.konnected.io
+      email: help@konnected.io
+servers:
+  - url: http://{localController}
+    description: Hostname or IP address of your custom endpoint application on the local network or internet.
+    variables:
+      localController:
+        default: my-app.local
+
+paths:
+  /device/{deviceId}:
+    get:
+      summary: Get State
+      description: Return the state of a switch or actuator
+      parameters:
+        - in: path
+          name: deviceId
+          schema:
+            type: string
+          required: true
+          description: Unique twelve-character hex ID of the device (chipID or MAC)
+        - in: query
+          name: zone
+          schema:
+            type: string
+          description: Zone identifier to query state (if omitted, all binary sensor zones are returned).
+    put:
+      summary: Update State
+      description: Receive a state update from a Konnected zone
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/zone'
+      parameters:
+        - in: path
+          name: deviceId
+          schema:
+            type: string
+          required: true
+          description: Unique twelve-character hex ID of the device (chipID or MAC)
+
+components:
+  schemas:
+    zone:
+      type: object
+      properties:
+        zone:
+          type: string
+          description: The zone identifier
+          enum:
+            - '1'
+            - '2'
+            - '3'
+            - '4'
+            - '5'
+            - '6'
+            - '7'
+            - '8'
+            - '9'
+            - '10'
+            - '11'
+            - '12'
+            - 'out'
+            - 'alarm1'
+            - 'out1'
+            - 'alarm2_out2'
+        state:
+          type: integer
+          description: The current state of the zone (`1` = open/on; `0` = closed/off)
+          enum:
+            - '0'
+            - '1'
+  
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+
+security:
+  - bearerAuth: []

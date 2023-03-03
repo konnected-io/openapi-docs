@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info:
-  title: Konnected Alarm Panel API
+  title: Alarm Panel Device API
   summary: Local REST based API for the Konnected Alarm Panel and Alarm Panel Pro
   description: Konnected's Alarm Panel and Alarm Panel Pro share a common HTTP API for integrating with a local smart home platform, app or controller.
   version: 1.0.0
@@ -226,8 +226,18 @@ components:
             A set of AWS credentials and settings for connecting and communicating with AWS IoT. This is only required 
             if `endpoint_type` is `aws_iot`.
           properties:
+            authorizier:
+              type: string
+              description: The name of the AWS IoT Authorizer (Alarm Panel / ESP8266 only)
+            token:
+              type: string
+              description: A token unique to the device that is authenticated, passed to the authorizer (Alarm Panel / ESP8266 only)
+            token_signature:
+              type: string
+              description: The token signature, signed by the private key of the authorizer (Alarm Panel / ESP8266 only)
             certs:
               type: object
+              description: An object containing certificates (Alarm Panel Pro / ESP32 only)
               properties:
                 client_cert:
                   type: string
@@ -422,7 +432,7 @@ components:
             - 'alarm2_out2'
         state:
           type: integer
-          description: The current state of the device (`1` = open/on; `0` = closed/off)
+          description: The current state of the zone (`1` = open/on; `0` = closed/off)
           enum:
             - '0'
             - '1'
